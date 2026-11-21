@@ -11,7 +11,7 @@ class Task extends Model
 {
     use HasUuids;
 
-    public const TYPES = ['demo_delay' => 'Задержка', 'text_analysis' => 'Анализ текста', 'csv_analysis' => 'Анализ CSV'];
+    public const TYPES = ['demo_delay' => 'Тестовая нагрузка', 'text_analysis' => 'Анализ текста', 'csv_analysis' => 'Анализ CSV'];
 
     public const STATUSES = ['queued' => 'В очереди', 'processing' => 'В работе', 'completed' => 'Готово', 'failed' => 'Ошибка'];
 

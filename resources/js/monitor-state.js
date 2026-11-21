@@ -4,6 +4,27 @@ export const statuses = {
     completed: "Готово",
     failed: "Ошибка",
 };
+
+export function mergeEvents(previous, incoming) {
+    return [
+        ...new Map(
+            [...previous, ...incoming].map((event) => [event.id, event]),
+        ).values(),
+    ]
+        .sort((a, b) => b.id - a.id)
+        .slice(0, 100);
+}
+
+export function recentTransitions(events, seenIds, serverTime) {
+    const now = new Date(serverTime).getTime();
+    return transitions(
+        events.filter((event) => {
+            const age = now - new Date(event.created_at).getTime();
+            return age >= 0 && age <= 5000;
+        }),
+        seenIds,
+    );
+}
 export const eventLabels = {
     task_created: "Задача создана",
     task_queued: "Передана в RabbitMQ",

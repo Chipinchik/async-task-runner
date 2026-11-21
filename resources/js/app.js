@@ -2,12 +2,13 @@ import Alpine from "alpinejs";
 import {
     statuses,
     eventLabels,
-    transitions,
+    recentTransitions,
+    mergeEvents,
     workerTask,
     freshWorkers,
 } from "./monitor-state";
 const types = {
-    demo_delay: "Задержка",
+    demo_delay: "Тестовая нагрузка",
     text_analysis: "Анализ текста",
     csv_analysis: "Анализ CSV",
 };
@@ -33,13 +34,20 @@ const common = {
     },
 };
 async function getJson(url) {
-    const response = await fetch(url, {
-        headers: { Accept: "application/json" },
-        credentials: "same-origin",
-        signal: AbortSignal.timeout(8000),
-    });
+    let response;
+    try {
+        response = await fetch(url, {
+            headers: { Accept: "application/json" },
+            credentials: "same-origin",
+            signal: AbortSignal.timeout(8000),
+        });
+    } catch {
+        throw new Error("Нет связи с сервером. Повторяем подключение…");
+    }
     if (response.status === 401)
         throw new Error("Сессия завершена. Войдите снова.");
+    if (response.status === 403)
+        throw new Error("Недостаточно прав для просмотра данных.");
     if (!response.ok)
         throw new Error("Не удалось обновить данные. Повторяем подключение.");
     return response.json();
@@ -173,9 +181,10 @@ Alpine.data("monitor", (url) => ({
                 // The first snapshot is history, not activity happening now.
                 const mayAnimate = this.fresh() && this.animate;
                 this.flashes = mayAnimate
-                    ? transitions(
+                    ? recentTransitions(
                           data.events,
                           new Set(this.events.map((e) => e.id)),
+                          data.server_time,
                       )
                     : {};
                 clearTimeout(this.flashTimer);
@@ -187,16 +196,7 @@ Alpine.data("monitor", (url) => ({
                 this.connected = true;
                 this.lastReceived = Date.now();
                 this.now = this.lastReceived;
-                this.events = [
-                    ...new Map(
-                        [...data.events, ...this.events].map((event) => [
-                            event.id,
-                            event,
-                        ]),
-                    ).values(),
-                ]
-                    .sort((a, b) => b.id - a.id)
-                    .slice(0, 100);
+                this.events = mergeEvents(this.events, data.events);
                 this.connection =
                     "Подключено · " + new Date().toLocaleTimeString("ru-RU");
             }

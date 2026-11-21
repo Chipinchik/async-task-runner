@@ -18,7 +18,7 @@ class StoreTaskRequest extends FormRequest
         return [
             'type' => ['required', Rule::in(array_keys(Task::TYPES))],
             'seconds' => ['exclude_unless:type,demo_delay', 'required', 'integer', 'between:3,30'],
-            'text' => ['exclude_unless:type,text_analysis', 'required', 'string', 'max:100000', function (string $attribute, mixed $value, \Closure $fail): void {
+            'text' => ['bail', 'exclude_unless:type,text_analysis', 'required', 'string', 'max:100000', function (string $attribute, mixed $value, \Closure $fail): void {
                 if (! mb_check_encoding($value, 'UTF-8')) {
                     $fail('Текст должен быть в UTF-8.');
                 }

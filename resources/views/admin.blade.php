@@ -3,8 +3,7 @@
         <x-page-heading title="Управление системой"
             description="Состояние сервисов, ошибки обработки и контроль повторных запусков."><a class="button secondary"
                 href="{{ route('monitor') }}"><x-icon name="activity" />Мониторинг</a></x-page-heading>
-        <div class="poll-status" role="status"><span class="live-dot" :class="{ offline: !fresh() }"></span><span
-                x-text="connection"></span></div>
+        <x-connection-status :monitor="true" />
         <div class="skeleton" x-show="!snapshot">Загружаем состояние системы…</div>
         <template x-if="snapshot">
             <div>
@@ -61,8 +60,8 @@
                 </section>
                 <div class="admin-actions">
                     <section class="panel padded"><span class="icon-tile"><x-icon name="play" /></span>
-                        <h2>Посмотрите параллельность в действии</h2>
-                        <p>6 задач по 10 секунд. Три свободных Worker обработают их примерно за две волны. Наблюдайте за
+                        <h2>Проверка производительности</h2>
+                        <p>6 задач по 10 секунд. Время обработки зависит от количества доступных Workers. Следите за
                             результатом в мониторинге.</p>
                         <form method="POST" action="{{ route('admin.demo') }}" x-data="submitForm">@csrf<x-submit
                                 label="Создать 6 тестовых задач" icon="play" /></form>

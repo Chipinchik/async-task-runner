@@ -19,8 +19,15 @@
                         <div class="result-metric"><span x-text="label"></span><strong
                                 x-text="task.result_data[key]"></strong></div>
                     </template></div>
-                <h3>Частые слова</h3><template x-for="word in task.result_data.top_words" :key="word.word">
-                    <div class="word-row"><span x-text="word.word"></span>
+                <h3>Частые слова</h3>
+                <p class="help" x-show="task.result_data.top_words.length === 0">Слова не найдены. В тексте есть только пробелы или знаки препинания.</p>
+                <template x-for="word in task.result_data.top_words" :key="word.word">
+                    <div class="word-row">
+                        <span x-show="word.word.length <= 48" x-text="word.word"></span>
+                        <details class="long-word" x-show="word.word.length > 48">
+                            <summary :aria-label="'Показать слово полностью: ' + word.word.length + ' символов'" x-text="word.word.slice(0, 32) + '…'"></summary>
+                            <p x-text="word.word"></p>
+                        </details>
                         <div class="progress-track" aria-hidden="true">
                             <div :style="'transform:scaleX(' + word.count / task.result_data.top_words[0].count + ')'">
                             </div>
@@ -45,8 +52,8 @@
                             <tr>
                                 <th>Столбец</th>
                                 <th>Пусто</th>
-                                <th>Min</th>
-                                <th>Max</th>
+                                <th>Минимум</th>
+                                <th>Максимум</th>
                                 <th>Сумма</th>
                                 <th>Среднее</th>
                             </tr>

@@ -3,11 +3,10 @@
         <x-page-heading title="Мониторинг обработки"
             description="От отправки в очередь до готового результата. Все события — в реальном времени.">
             <form method="POST" action="{{ route('admin.demo') }}" x-data="submitForm">@csrf<x-submit
-                    label="Запустить демо" icon="play" /></form>
+                    label="Запустить нагрузку" icon="play" /></form>
         </x-page-heading>
         <div class="monitor-toolbar">
-            <div class="poll-status" role="status"><span class="live-dot" :class="{ offline: !fresh() }"></span><span
-                    x-text="connection"></span></div><button class="button secondary small" @click="toggleAnimation()"
+            <x-connection-status :monitor="true" /><button class="button secondary small" @click="toggleAnimation()"
                 :aria-pressed="animate"><x-icon name="activity" /><span
                     x-text="animate ? 'Анимация включена' : 'Анимация выключена'"></span></button>
         </div>
@@ -44,9 +43,9 @@
                 <section class="panel diagram-panel">
                     <div class="panel-heading diagram-heading">
                         <div>
-                            <h2>Путь задачи <span class="badge neutral">Live topology</span></h2>
+                            <h2>Путь задачи <span class="badge neutral">Схема обработки</span></h2>
                             <p>Laravel → RabbitMQ → Workers → PostgreSQL</p>
-                        </div><span class="muted">Демо: 6 задач × 10 секунд</span>
+                        </div><span class="muted">Нагрузка: 6 задач × 10 секунд</span>
                     </div>
                     <div class="pipeline" aria-label="Схема распределённой обработки">
                         <div class="flow-node node-laravel" :class="{ 'node-flash': animate && flashes.created }">
@@ -177,7 +176,7 @@
                         <div class="empty-state" x-show="snapshot.tasks.length === 0"><span class="icon-tile"><x-icon
                                     name="check" /></span>
                             <h3>Всё обработано</h3>
-                            <p>Запустите демо, чтобы увидеть движение задач и параллельную работу Workers.</p>
+                            <p>Создайте задачу или запустите тестовую нагрузку.</p>
                         </div>
                     </section>
                     <x-live-events />

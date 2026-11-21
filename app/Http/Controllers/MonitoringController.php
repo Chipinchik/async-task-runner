@@ -18,7 +18,11 @@ class MonitoringController extends Controller
         Gate::authorize('view', $task);
         $task->load(['events' => fn ($query) => $query->latest('id')->limit(100)]);
 
-        return response()->json(['task' => $task, 'delivery' => $task->outbox()->where('generation', $task->generation)->first(['published_at', 'available_at', 'last_error'])])->header('Cache-Control', 'no-store');
+        $data = $task->only(['id', 'type', 'status', 'input_data', 'result_data', 'progress', 'worker_id', 'attempts', 'max_attempts', 'error_message', 'created_at', 'queued_at', 'started_at', 'finished_at', 'duration_ms']);
+        unset($data['input_data']['path']);
+        $data['events'] = $task->events;
+
+        return response()->json(['task' => $data, 'delivery' => $task->outbox()->where('generation', $task->generation)->first(['published_at', 'available_at', 'last_error'])])->header('Cache-Control', 'no-store');
     }
 
     public function snapshot(Request $request, BrokerMetrics $metrics): JsonResponse

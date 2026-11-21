@@ -2,12 +2,16 @@
     <x-page-heading title="Новая задача"
         description="Выберите тип обработки и добавьте данные. Остальное сделаем в фоне." />
     <div class="creation-grid">
-        <section class="panel padded" x-data="{ type: @js(old('type', array_key_exists(request('type', 'demo_delay'), \App\Models\Task::TYPES) ? request('type', 'demo_delay') : 'demo_delay')) }">
+        @php
+            $selectedType = old('type', request('type', 'demo_delay'));
+            $selectedType = is_string($selectedType) && array_key_exists($selectedType, \App\Models\Task::TYPES) ? $selectedType : 'demo_delay';
+        @endphp
+        <section class="panel padded" x-data="{ type: @js($selectedType) }">
             <form method="POST" enctype="multipart/form-data" action="{{ route('tasks.store') }}" class="form-stack"
                 x-data="submitForm">@csrf
                 <fieldset class="type-picker" id="type">
                     <legend>Что будем обрабатывать?</legend>
-                    @foreach (['demo_delay' => ['clock', 'Тестовая задержка', '3–30 секунд'], 'text_analysis' => ['text', 'Анализ текста', 'Русский и английский'], 'csv_analysis' => ['file', 'Анализ CSV', 'Таблица до 5 МБ']] as $value => $info)
+                    @foreach (['demo_delay' => ['clock', 'Тестовая нагрузка', '3–30 секунд'], 'text_analysis' => ['text', 'Анализ текста', 'Русский и английский'], 'csv_analysis' => ['file', 'Анализ CSV', 'Таблица до 5 МБ']] as $value => $info)
                         <label class="type-choice" :class="{ selected: type === '{{ $value }}' }"><input
                                 type="radio" name="type" value="{{ $value }}" x-model="type"><x-icon
                                 :name="$info[0]" /><strong>{{ $info[1] }}</strong><small>{{ $info[2] }}</small></label>
@@ -33,7 +37,7 @@
                         <textarea id="text" name="text" rows="9" maxlength="100000" :disabled="type !== 'text_analysis'"
                             :required="type === 'text_analysis'" aria-describedby="text-hint text-error"
                             aria-invalid="{{ $errors->has('text') ? 'true' : 'false' }}"
-                            placeholder="Вставьте текст на русском или английском…">{{ old('text') }}</textarea><small class="help" id="text-hint">До 100 000 символов. Посчитаем
+                            placeholder="Вставьте текст на русском или английском…">{{ is_string(old('text')) ? old('text') : '' }}</textarea><small class="help" id="text-hint">До 100 000 символов. Посчитаем
                             слова, строки, символы и частоты слов.</small><span class="field-error" id="text-error">
                             @error('text')
                                 {{ $message }}

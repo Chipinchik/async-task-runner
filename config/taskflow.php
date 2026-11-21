@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'hsts' => (bool) env('SECURITY_HSTS', false),
     'heartbeat_ttl' => 15,
     'lease_seconds' => 90,
     'retry_delays' => [5, 15, 30],

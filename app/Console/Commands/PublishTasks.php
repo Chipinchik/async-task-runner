@@ -14,16 +14,22 @@ class PublishTasks extends Command
 
     public function handle(OutboxPublisher $publisher, TaskExecution $execution): int
     {
+        $stopping = false;
+        if (extension_loaded('pcntl')) {
+            $this->trap([SIGTERM, SIGINT], function () use (&$stopping): void {
+                $stopping = true;
+            });
+        }
         do {
             $execution->recoverExpired();
             $count = $publisher->publish();
             if ($count > 0) {
                 $this->info("Опубликовано: {$count}");
             }
-            if (! $this->option('once')) {
+            if (! $this->option('once') && ! $stopping) {
                 sleep(1);
             }
-        } while (! $this->option('once'));
+        } while (! $this->option('once') && ! $stopping);
 
         return self::SUCCESS;
     }

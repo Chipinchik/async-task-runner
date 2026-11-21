@@ -33,3 +33,6 @@ Thumbs.db
 /database/*.sqlite*
 /artifacts/
 /.agents/skills/
+
+/screens/
+/.agents/

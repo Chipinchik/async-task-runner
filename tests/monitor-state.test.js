@@ -4,7 +4,29 @@ import {
     transitions,
     workerTask,
     freshWorkers,
+    mergeEvents,
+    recentTransitions,
 } from "../resources/js/monitor-state.js";
+
+test('a long monitoring session retains only 100 unique latest events', () => {
+    let events = [];
+    for (let i = 0; i < 10000; i += 25) {
+        events = mergeEvents(events, Array.from({length: 50}, (_, j) => ({id: i + j})));
+        assert.ok(events.length <= 100);
+    }
+    assert.equal(new Set(events.map(e => e.id)).size, 100);
+    assert.equal(events[0].id, 10024);
+});
+
+test('catch-up history never appears as current worker activity', () => {
+    const events = [
+        {id: 1, event_type:'task_started', worker_id:'old', created_at:'2026-01-01T00:00:00Z'},
+        {id: 2, event_type:'task_started', worker_id:'live', created_at:'2026-01-01T00:00:09Z'},
+    ];
+    const result = recentTransitions(events, new Set(), '2026-01-01T00:00:10Z');
+    assert.equal(result.workers.old, undefined);
+    assert.equal(result.workers.live.received, true);
+});
 
 test("publication never guesses a worker and duplicate events do not animate", () => {
     const events = [{ id: 1, event_type: "task_queued", worker_id: null }];

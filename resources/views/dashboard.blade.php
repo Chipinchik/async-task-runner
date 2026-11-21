@@ -59,22 +59,15 @@
             </div>
         </section>
         <section class="panel monitor-callout">
-            <div class="callout-flow" aria-hidden="true">
-                @foreach (['code', 'queue', 'server', 'database'] as $icon)
-                    <span class="flow-icon"><x-icon :name="$icon" /></span>
-                    @if (!$loop->last)
-                        <span class="flow-line"></span>
-                    @endif
-                @endforeach
-            </div>
+            <span class="icon-tile"><x-icon :name="($counts['failed'] ?? 0) ? 'alert' : 'activity'" /></span>
             <div>
-                <h2>Обработка без ожидания</h2>
-                <p>Задачи выполняются в фоне. От создания до сохранения результата — каждый этап остаётся в истории.</p>
+                <h2>{{ ($counts['failed'] ?? 0) ? 'Проверьте ошибки обработки' : 'Контроль выполнения' }}</h2>
+                <p>{{ ($counts['failed'] ?? 0) ? 'Откройте задачи с ошибками, чтобы проверить входные данные и причину сбоя.' : 'Откройте список задач, чтобы просмотреть текущие состояния и сохранённые результаты.' }}</p>
             </div>
+            <a class="text-link" href="{{ route('tasks.index', ($counts['failed'] ?? 0) ? ['status' => 'failed'] : []) }}">{{ ($counts['failed'] ?? 0) ? 'Перейти к ошибкам' : 'Перейти к задачам' }}</a>
             @can('admin')
                 <a class="button secondary small" href="{{ route('monitor') }}"><x-icon name="activity" />Открыть
-                мониторинг</a>@else<a class="button secondary small" href="{{ route('tasks.index') }}">Посмотреть мои
-                    задачи</a>
+                мониторинг</a>
             @endcan
         </section>
     </div>
@@ -87,7 +80,7 @@
         </div><x-task-table :tasks="$tasks" />
     </section>
     <div class="type-grid">
-        @foreach (['demo_delay' => ['clock', 'Тестовая задержка', 'Наглядный прогресс и проверка параллельной обработки.'], 'text_analysis' => ['text', 'Анализ текста', 'Слова, символы и частоты в русском и английском тексте.'], 'csv_analysis' => ['file', 'Анализ CSV', 'Структура таблицы, пропуски и числовая статистика.']] as $type => $info)
+        @foreach (['demo_delay' => ['clock', 'Тестовая нагрузка', 'Наглядный прогресс и проверка параллельной обработки.'], 'text_analysis' => ['text', 'Анализ текста', 'Слова, символы и частоты в русском и английском тексте.'], 'csv_analysis' => ['file', 'Анализ CSV', 'Структура таблицы, пропуски и числовая статистика.']] as $type => $info)
             <a class="type-card" href="{{ route('tasks.create', ['type' => $type]) }}"><span class="icon-tile"><x-icon
                         :name="$info[0]" /></span>
                 <h3>{{ $info[1] }}</h3>

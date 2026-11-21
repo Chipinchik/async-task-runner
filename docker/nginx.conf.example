@@ -1,0 +1,36 @@
+# Reference: PHP-FPM on this host, TLS terminated here. Adjust paths/domain first.
+# Not used by the local Docker Compose stack.
+server {
+    listen 80;
+    server_name taskflow.example.com;
+    return 301 https://taskflow.example.com$request_uri;
+}
+server {
+    listen 443 ssl;
+    server_name taskflow.example.com;
+    root /srv/taskflow/public;
+    index index.php;
+    ssl_certificate /etc/ssl/taskflow/fullchain.pem;
+    ssl_certificate_key /etc/ssl/taskflow/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    server_tokens off;
+    client_max_body_size 6m;
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    location / { try_files $uri $uri/ /index.php?$query_string; }
+    location = /index.php {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $realpath_root/index.php;
+        fastcgi_param DOCUMENT_ROOT $realpath_root;
+        fastcgi_param HTTPS on;
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        fastcgi_hide_header X-Powered-By;
+    }
+    location ~ \.php$ { return 404; }
+    location ~ /\. { deny all; }
+    location /build/ { try_files $uri =404; expires 1y; add_header Cache-Control "public, immutable"; }
+    location = /up { access_log off; try_files $uri /index.php?$query_string; }
+    # Readiness is intended for internal probes. Adapt to the actual probe subnet.
+    location = /ready { allow 127.0.0.1; deny all; try_files $uri /index.php?$query_string; }
+}

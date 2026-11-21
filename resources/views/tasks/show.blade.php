@@ -2,8 +2,7 @@
     <div x-data="taskDetail(@js(route('api.tasks.show', $task)))">
         <x-page-heading :title="\App\Models\Task::TYPES[$task->type]" :description="'Задача #' . substr($task->id, -8)"><a class="button secondary"
                 href="{{ route('tasks.index') }}"><x-icon name="tasks" />К списку задач</a></x-page-heading>
-        <div class="poll-status"><span class="live-dot" :class="{ offline: !connected }"></span><span x-text="connection"
-                role="status"></span></div>
+        <x-connection-status />
         <div class="skeleton" x-show="!task">Загружаем состояние задачи…</div>
         <template x-if="task">
             <div>

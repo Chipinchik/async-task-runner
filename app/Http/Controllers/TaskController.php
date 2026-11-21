@@ -24,10 +24,10 @@ class TaskController extends Controller
     public function index(Request $request): View
     {
         $query = Task::query()->when($request->user()->role !== 'admin', fn ($query) => $query->where('user_id', $request->user()->id));
-        if (array_key_exists((string) $request->status, Task::STATUSES)) {
+        if (is_string($request->status) && array_key_exists($request->status, Task::STATUSES)) {
             $query->where('status', $request->status);
         }
-        if (array_key_exists((string) $request->type, Task::TYPES)) {
+        if (is_string($request->type) && array_key_exists($request->type, Task::TYPES)) {
             $query->where('type', $request->type);
         }
 

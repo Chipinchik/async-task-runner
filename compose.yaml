@@ -53,6 +53,7 @@ services:
     publisher:
         <<: *application
         command: ["publisher"]
+        stop_grace_period: 70s
         depends_on:
             app: { condition: service_healthy }
     postgres:

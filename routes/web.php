@@ -2,10 +2,12 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\MonitoringController;
+use App\Http\Controllers\ReadinessController;
 use App\Http\Controllers\TaskController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard');
+Route::get('/ready', ReadinessController::class)->withoutMiddleware('web');
 Route::middleware('guest')->group(function (): void {
     Route::view('/login', 'auth.login')->name('login');
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:6,1');

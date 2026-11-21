@@ -13,12 +13,12 @@
 <body>
     <a class="skip-link" href="#main-content">К содержимому</a>
     @auth
-        <div class="app-shell" x-data="{ navOpen: false }" @keydown.escape.window="navOpen = false">
+        <div class="app-shell" x-data="{ navOpen: false }" @keydown.escape.window="if (navOpen) { navOpen = false; $nextTick(() => $refs.menuButton.focus()) }">
             <aside class="sidebar" :class="{ 'is-open': navOpen }">
                 <a href="{{ route('dashboard') }}" class="brand"><span class="brand-mark"><x-icon
-                            name="activity" /></span>TaskFlow<span class="brand-beta">workspace</span></a>
+                            name="activity" /></span>TaskFlow</a>
                 <div class="workspace-label"><span class="workspace-avatar">T</span>
-                    <div><strong>Рабочее пространство</strong><small>Локальный проект</small></div>
+                    <div><strong>Рабочее пространство</strong><small>Управление задачами</small></div>
                 </div>
                 <p class="nav-label">ПРОЕКТ</p>
                 <nav id="main-nav" aria-label="Основная навигация">
@@ -40,9 +40,6 @@
                     @endcan
                 </nav>
                 <div class="sidebar-bottom">
-                    <div class="sidebar-note"><x-icon name="server" /><strong>Создано для параллельности</strong>
-                        <p>Одна очередь. Независимые обработчики. Прозрачный результат.</p>
-                    </div>
                     <div class="account-row"><a href="{{ route('profile') }}" class="account-link"><span
                                 class="avatar">{{ mb_substr(auth()->user()->name, 0, 1) }}</span><span><strong>{{ auth()->user()->name }}</strong><small>{{ auth()->user()->role === 'admin' ? 'Администратор' : 'Пользователь' }}</small></span></a>
                         <form method="POST" action="{{ route('logout') }}">@csrf<button class="icon-button"
@@ -50,12 +47,12 @@
                     </div>
                 </div>
             </aside>
-            <main class="main" id="main-content">
-                <header class="topbar"><button type="button" class="icon-button mobile-menu" @click="navOpen = !navOpen"
+            <main class="main" id="main-content" tabindex="-1">
+                <header class="topbar"><button type="button" x-ref="menuButton" class="icon-button mobile-menu" @click="navOpen = !navOpen"
                         :aria-expanded="navOpen" aria-controls="main-nav" aria-label="Меню навигации"><x-icon
                             name="menu" /></button>
                     <div class="breadcrumb">Рабочее пространство <span>/</span><strong>{{ $title ?? 'Обзор' }}</strong>
-                    </div><span class="environment">Локальная среда</span>
+                    </div>
                 </header>
                 <div class="content">
                     @if (session('success'))
@@ -69,7 +66,7 @@
             </main>
         </div>
     @else
-        <main class="auth-shell" id="main-content">
+        <main class="auth-shell" id="main-content" tabindex="-1">
             <section class="auth-story">
                 <a href="{{ route('login') }}" class="brand"><span class="brand-mark"><x-icon
                             name="activity" /></span>TaskFlow</a>
