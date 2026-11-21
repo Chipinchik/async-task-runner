@@ -1,5 +1,7 @@
 <?php
 
+use App\Queue\ConfirmedRabbitMQQueue;
+
 return [
 
     /*
@@ -30,6 +32,21 @@ return [
     */
 
     'connections' => [
+
+        'rabbitmq' => [
+            'driver' => 'rabbitmq',
+            'queue' => env('RABBITMQ_QUEUE', 'taskflow'),
+            'worker' => ConfirmedRabbitMQQueue::class,
+            'after_commit' => false,
+            'hosts' => [[
+                'host' => env('RABBITMQ_HOST', '127.0.0.1'),
+                'port' => (int) env('RABBITMQ_PORT', 5672),
+                'user' => env('RABBITMQ_USER', 'taskflow'),
+                'password' => env('RABBITMQ_PASSWORD'),
+                'vhost' => env('RABBITMQ_VHOST', '/'),
+            ]],
+            'options' => ['heartbeat' => 120, 'connection_timeout' => 3, 'read_timeout' => 250, 'write_timeout' => 10, 'channel_rpc_timeout' => 5],
+        ],
 
         'sync' => [
             'driver' => 'sync',

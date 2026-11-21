@@ -1,58 +1,173 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# TaskFlow
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Практическая реализация распределённой асинхронной обработки задач на Laravel 13, PHP 8.3, RabbitMQ и PostgreSQL. Интерфейс — Blade, Tailwind CSS, Alpine.js и Vite. Все задания действительно выполняются в отдельных процессах, без frontend-имитации.
 
-## About Laravel
+## Быстрый запуск на Windows
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+Нужен запущенный Docker Desktop с Linux containers (WSL2). PHP, Composer и Node на хосте для Docker-запуска не требуются.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+В PowerShell из корня проекта:
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+```powershell
+powershell -ExecutionPolicy Bypass -File .\docker\setup.ps1
+docker compose up -d --build --scale worker=3
+docker compose exec app php artisan taskflow:admin admin@example.test
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Скрипт создаёт игнорируемый Git файл `.env` из `.env.example` и криптографически случайный APP_KEY. Существующий ключ сохраняется. Команда создания администратора спрашивает пароль скрытым вводом, минимум 12 символов; не передавайте пароль в аргументах командной строки. Существующий аккаунт не перезаписывается.
 
-## Contributing
+- Приложение: http://localhost:8000
+- RabbitMQ Management: http://localhost:15672
+- В явно локальном Compose-профиле пользователь RabbitMQ — `taskflow`, пароль по умолчанию — `local-taskflow-broker`. Это демонстрационные настройки, не реальные секреты.
+- PostgreSQL и AMQP не опубликованы на хост. HTTP-порты привязаны только к `127.0.0.1`.
+- Обычного пользователя можно зарегистрировать через интерфейс. Созданные через UI пользователи всегда имеют роль `user`.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Первый старт собирает frontend в Node stage, устанавливает Composer-зависимости, поднимает БД и брокер, автоматически выполняет миграции и объявляет durable очередь. Worker и publisher стартуют после healthcheck приложения.
 
-## Code of Conduct
+На Linux/macOS: скопируйте `.env.example` в `.env`, задайте APP_KEY (например, `php artisan key:generate` при установленных зависимостях), затем используйте те же команды Compose.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## Возможности
 
-## Security Vulnerabilities
+- Регистрация, вход, выход, редактирование имени/email; CSRF, ограничения частоты запросов, серверные политики.
+- Пользователь видит только свои задания. Администратор видит все задачи, мониторинг, статистику и может повторить окончательно неудачное задание.
+- Dashboard, фильтры по статусу/типу, пагинация, карточка со входом, результатом, временем, ошибкой и историей.
+- **DemoDelay:** 3–30 секунд, измеряемая длительность и прогресс каждую секунду.
+- **TextAnalysis:** до 100 000 Unicode-символов; число символов, слов, строк, уникальных слов и топ-10 частот. Регистр игнорируется, дефис и апостроф внутри слова сохраняются. Символы считаются как Unicode code points, не графемы.
+- **CsvAnalysis:** UTF-8 до 5 МиБ, BOM допустим, разделители запятая/точка с запятой/табуляция, quoted fields, до 100 уникальных непустых заголовков. Файл читается построчно; неверная ширина записи и кодировка завершают попытку ошибкой. Пустые значения не участвуют в арифметике. Столбец считается числовым, только если все непустые значения числовые и есть хотя бы одно число. Десятичный разделитель — точка; статистика использует float, не денежную арифметику.
+- Мониторинг с HTTP polling 1,5 с, SVG-анимацией новых событий, реальными Worker ID, heartbeat TTL 15 с и журналом. Во время ошибки polling данные помечаются устаревшими. Коротким заданиям искусственный процент не назначается.
+- Метрики `messages_ready`, `messages_unacknowledged`, `consumers` читаются сервером через Management API. Нет доступа — «нет данных», а не нули. Management API сам обновляет статистику с задержкой; статусы PostgreSQL показаны отдельно.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+## Архитектура и гарантии
 
-## License
+```text
+Browser → Laravel HTTP → PostgreSQL (task + outbox в одной транзакции)
+                             ↓
+                     отдельный publisher
+                             ↓ publisher confirm
+                         RabbitMQ
+                             ↓ basic_consume, prefetch=1
+                     независимые Workers
+                             ↓
+                PostgreSQL (состояние, результат, события)
+                             ↑
+                    HTTP polling браузера
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+| Сервис | Назначение |
+| --- | --- |
+| app | HTTP, авторизация, валидация, интерфейс и JSON |
+| publisher | Outbox, публикация, повторы публикации и восстановление просроченных выполнений |
+| worker | Laravel Job, получение сообщений через RabbitMQ basic_consume |
+| postgres | Пользователи, задания, события, outbox, heartbeat, сессии |
+| rabbitmq | Durable очередь, persistent сообщения, management plugin |
+
+HTTP сохраняет `task_created` и запись outbox, быстро возвращает ответ и не ждёт брокер или обработчик. Диспетчер опрашивает outbox раз в секунду. `task_queued` и `queued_at` появляются только после publisher confirm. Публикация проводится под короткой блокировкой task/outbox, чтобы Worker не записал старт раньше регистрации подтверждения. Нет транзакции на всё выполнение задания.
+
+Сообщение содержит UUID задачи и номер поколения; вход и результат остаются в PostgreSQL, CSV — в приватном общем volume. Используется стандартная сериализация Laravel Job.
+
+Доставка **at least once**, без обещания exactly-once. Возможен дубль, если процесс завершился после подтверждения RabbitMQ, но до фиксации БД. Получение защищено транзакционной блокировкой строки, поколением сообщения и execution token. Завершённые, уже выполняющиеся и устаревшие поколения игнорируются. Токен не позволяет старому исполнителю перезаписать результат новой попытки. Эти обработчики вычисляют результат без внешних побочных эффектов; добавляя отправку писем/платежи, нужно отдельно проектировать их идемпотентность.
+
+Три попытки обработки в одном цикле. При исключении сохраняется `task_failed`; если лимит не исчерпан — `task_retried`, новое поколение и outbox с задержкой 5/15 секунд. После третьей ошибки статус остаётся `failed`. Ручной повтор допускается только администратором и только из `failed`, сбрасывает счётчик текущего цикла; вся история сохраняется. Повторы обработки управляются устойчивой записью в БД, а не повторным исполнением из HTTP.
+
+Таймаут Job — 60 с; lease выполнения — 90 с, продлевается при прогрессе. Убитый Worker восстанавливается через publisher после истечения lease. Heartbeat сообщает только о недавней активности процесса; просроченный heartbeat не считается доказательством жизни. RabbitMQ не получает заранее назначенный Worker.
+
+При недоступности брокера outbox остаётся в БД, записывается понятная ошибка, повтор публикации — через 5 с без лимита. Worker-процессы перезапускаются Docker. После длительного сбоя restart backoff Docker может добавить до минуты к восстановлению. Удаление очереди администратором брокера или потеря persistent volumes не восстанавливаются автоматически.
+
+### Совместимость драйвера
+
+В lock-файле зафиксированы Laravel 13.43 и `vladimir-yuldashev/laravel-queue-rabbitmq` 15.0.2. В `app/Queue/TaskflowConsumer.php` адаптированы изменённые сигнатуры timeout/stop Laravel 13. В `ConfirmedRabbitMQQueue.php` добавлены publisher confirms, обработка nack/returned message и переподключение. Confirm mode включается один раз на AMQP channel. Файлы `vendor` не меняются. При обновлении framework/driver обязательно повторять реальный интеграционный тест.
+
+Первичные источники: [драйвер RabbitMQ](https://github.com/vyuldashev/laravel-queue-rabbitmq), [Laravel Queues](https://laravel.com/docs/13.x/queues), [RabbitMQ confirms](https://www.rabbitmq.com/docs/confirms).
+
+## Настройки
+
+| Переменные | Использование |
+| --- | --- |
+| APP_KEY | Обязательный локальный ключ шифрования приложения |
+| TASKFLOW_DB_PASSWORD | Пароль PostgreSQL в Compose |
+| TASKFLOW_RABBITMQ_PASSWORD | Пароль RabbitMQ и его Management API в Compose |
+| DB_* | Настройки подключения Laravel к PostgreSQL |
+| RABBITMQ_HOST/PORT/USER/PASSWORD/VHOST/QUEUE | Подключение драйвера RabbitMQ |
+| RABBITMQ_MANAGEMENT_URL | Серверный URL Management API, секреты браузеру не отправляются |
+| SESSION_DRIVER / CACHE_STORE | В Compose оба используют database |
+| config/taskflow.php | TTL heartbeat, lease, интервалы повторов |
+
+Compose явно задаёт сетевые имена `postgres` и `rabbitmq`, очередь `taskflow` и локальные сервисные настройки; произвольные значения из старого Laravel `.env` их не подменяют. Меняя имя очереди в Compose, измените также команды объявления/consumer в `docker/entrypoint.sh`. Пароли после первого запуска volume нужно менять согласованно внутри самих БД/брокера: изменение env не переинициализирует существующие данные.
+
+Данные сохраняются в named volumes `postgres_data`, `rabbitmq_data`, `task_storage`. Загруженные CSV не находятся в public. `.env*`, vendor, node_modules, SQLite и сборочные артефакты игнорируются Git; `.env.example` и lock-файлы сохраняются.
+
+## Демонстрация и эксплуатация
+
+```powershell
+docker compose up -d --scale worker=3
+docker compose ps
+docker compose logs -f worker publisher
+```
+
+Войдите администратором, откройте «Администрирование» или «Мониторинг», нажмите «Создать 6 тестовых задач». Ожидаются три одновременно работающих Worker и две волны примерно по 10 с. Допустимы накладные расходы и задержки polling.
+
+Для сравнения последовательной обработки, дождитесь пустой очереди:
+
+```powershell
+docker compose up -d --scale worker=1
+# Создайте 6 задач: ожидается около 60 секунд.
+docker compose up -d --scale worker=3
+```
+
+После изменений исходников нужна пересборка — рабочая директория не bind-mounted:
+
+```powershell
+docker compose up -d --build --scale worker=3
+docker compose exec app php artisan migrate --force
+docker compose exec app php artisan taskflow:publish --once
+docker compose exec rabbitmq rabbitmqctl list_queues name messages_ready messages_unacknowledged consumers
+docker compose down
+```
+
+`down` сохраняет volumes. `down -v` удаляет все данные — для обычной остановки не используйте его.
+
+Проверка сбоя брокера: `docker compose stop rabbitmq`, создайте задание и убедитесь, что оно ожидает публикации; затем `docker compose start rabbitmq`. Дождитесь переподключения Worker и завершения. Событие `task_queued` не должно появляться при неудачной публикации.
+
+## Тесты
+
+Быстрые Unit/Feature тесты используют SQLite в памяти и не трогают данные Compose:
+
+```powershell
+docker compose exec app php vendor/bin/phpunit
+```
+
+Без Docker (нужны Composer-зависимости и расширения PHP; на данном Windows ZIP/sockets/SQLite включаются параметрами процесса):
+
+```powershell
+php -d extension=sockets -d extension=pdo_sqlite vendor/bin/phpunit
+php vendor/bin/pint --test
+```
+
+Отдельный реальный тест, после запуска трёх Worker:
+
+```powershell
+docker compose exec app php vendor/bin/phpunit -c phpunit.integration.xml
+```
+
+Проверка последовательной обработки и аварийного завершения (на свободной локальной очереди):
+
+```powershell
+docker compose up -d --scale worker=1
+docker compose exec -e TASKFLOW_TEST_WORKERS=1 app php vendor/bin/phpunit -c phpunit.integration.xml --filter test_six_real_jobs
+docker compose up -d --scale worker=3
+# PowerShell 7.3+: тест сам создаёт данные, убивает workers после старта задачи,
+# восстанавливает сервисы, проверяет повтор и удаляет только собственные данные.
+pwsh -File tests/Integration/worker-crash.ps1
+```
+
+Unit/Feature конфигурация принудительно устанавливает тестовые env/server переменные. Дополнительно `Tests/TestCase.php` блокирует `RefreshDatabase` для любой БД, кроме SQLite `:memory:`. Реальный интеграционный набор не запускает миграции с очисткой.
+
+Этот тест не использует Queue::fake или RefreshDatabase. Создаёт собственных пользователей/задания, ждёт реальные сообщения, измеряет параллельность, проверяет метрики, дубль доставки, текст, общий CSV, ограничение попыток и ручной повтор. В конце удаляет только свои данные. Запускайте на свободной локальной очереди: сторонние задания могут исказить временной порог. Прерванный тест может оставить собственные тестовые записи.
+
+## Ограничения
+
+Это локальный демонстрационный стек: PHP development server, один PostgreSQL и один RabbitMQ, без HA, TLS, резервного копирования и production reverse proxy. Для публичного развёртывания нужны отдельная конфигурация, собственные секреты и эксплуатационные меры. Redis, Horizon и WebSockets намеренно не используются.
+
+Мониторинг доступен администратору; пользователь отслеживает собственную задачу в её карточке. JSON выдаёт не более 100 текущих задач/событий, журнал в БД хранится полностью. Автоматическая очистка загруженных CSV и архива событий не реализована: они остаются для повторов и аудита. Период хранения выбирает владелец приложения.
+
+На машине проверены контейнерная сборка frontend, миграции, **22 Unit/Feature теста (130 assertions)**, реальная цепочка с 3 Worker, повторная доставка, обработчики и повторы. Последний замер шести задач по 10 с: **21,15 с на трёх Worker**, **62,49 с на одном**. Максимум три одновременно выполняемых задачи и три unacknowledged сообщения. Проверена остановка/восстановление RabbitMQ: задание сохранилось, затем опубликовалось и завершилось. Проверен SIGKILL во время выполнения: после истечения lease задача завершилась на второй попытке с новым Worker ID.

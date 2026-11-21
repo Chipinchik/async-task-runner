@@ -1,0 +1,89 @@
+name: taskflow
+
+x-application: &application
+    build: .
+    image: taskflow-local
+    restart: unless-stopped
+    environment: &environment
+        APP_NAME: TaskFlow
+        APP_ENV: local
+        APP_DEBUG: "false"
+        APP_KEY: ${APP_KEY:?Generate APP_KEY in .env using php artisan key:generate}
+        APP_URL: http://localhost:8000
+        APP_LOCALE: ru
+        DB_CONNECTION: pgsql
+        DB_HOST: postgres
+        DB_PORT: 5432
+        DB_DATABASE: taskflow
+        DB_USERNAME: taskflow
+        DB_PASSWORD: ${TASKFLOW_DB_PASSWORD:-local-taskflow-db}
+        QUEUE_CONNECTION: rabbitmq
+        RABBITMQ_HOST: rabbitmq
+        RABBITMQ_PORT: 5672
+        RABBITMQ_USER: taskflow
+        RABBITMQ_PASSWORD: ${TASKFLOW_RABBITMQ_PASSWORD:-local-taskflow-broker}
+        RABBITMQ_VHOST: /
+        RABBITMQ_QUEUE: taskflow
+        RABBITMQ_MANAGEMENT_URL: http://rabbitmq:15672
+        SESSION_DRIVER: database
+        CACHE_STORE: database
+        LOG_CHANNEL: stderr
+        PHP_CLI_SERVER_WORKERS: 4
+    volumes:
+        - task_storage:/var/www/html/storage
+
+services:
+    app:
+        <<: *application
+        ports: ["127.0.0.1:8000:8000"]
+        depends_on:
+            postgres: { condition: service_healthy }
+            rabbitmq: { condition: service_healthy }
+        healthcheck:
+            test: ["CMD", "curl", "-fsS", "http://localhost:8000/up"]
+            interval: 5s
+            timeout: 3s
+            retries: 20
+    worker:
+        <<: *application
+        command: ["worker"]
+        stop_grace_period: 70s
+        depends_on:
+            app: { condition: service_healthy }
+    publisher:
+        <<: *application
+        command: ["publisher"]
+        depends_on:
+            app: { condition: service_healthy }
+    postgres:
+        image: postgres:17-alpine
+        restart: unless-stopped
+        environment:
+            POSTGRES_DB: taskflow
+            POSTGRES_USER: taskflow
+            POSTGRES_PASSWORD: ${TASKFLOW_DB_PASSWORD:-local-taskflow-db}
+        volumes: ["postgres_data:/var/lib/postgresql/data"]
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U taskflow -d taskflow"]
+            interval: 5s
+            timeout: 3s
+            retries: 20
+    rabbitmq:
+        image: rabbitmq:4-management-alpine
+        restart: unless-stopped
+        hostname: rabbitmq
+        environment:
+            RABBITMQ_DEFAULT_USER: taskflow
+            RABBITMQ_DEFAULT_PASS: ${TASKFLOW_RABBITMQ_PASSWORD:-local-taskflow-broker}
+        ports: ["127.0.0.1:15672:15672"]
+        volumes: ["rabbitmq_data:/var/lib/rabbitmq"]
+        healthcheck:
+            test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+            interval: 5s
+            timeout: 5s
+            retries: 30
+
+volumes:
+    postgres_data:
+    rabbitmq_data:
+    task_storage:
