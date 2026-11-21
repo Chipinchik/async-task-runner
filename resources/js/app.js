@@ -1,10 +1,11 @@
 import Alpine from "alpinejs";
-const statuses = {
-    queued: "В очереди",
-    processing: "В работе",
-    completed: "Готово",
-    failed: "Ошибка",
-};
+import {
+    statuses,
+    eventLabels,
+    transitions,
+    workerTask,
+    freshWorkers,
+} from "./monitor-state";
 const types = {
     demo_delay: "Задержка",
     text_analysis: "Анализ текста",
@@ -18,8 +19,17 @@ const common = {
     typeLabel(value) {
         return types[value] || value;
     },
+    eventLabel(value) {
+        return eventLabels[value] || value;
+    },
     date(value) {
         return value ? new Date(value).toLocaleString("ru-RU") : "—";
+    },
+    time(value) {
+        return value ? new Date(value).toLocaleTimeString("ru-RU") : "—";
+    },
+    taskUrl(id) {
+        return "/tasks/" + encodeURIComponent(id);
     },
 };
 async function getJson(url) {
@@ -28,25 +38,46 @@ async function getJson(url) {
         credentials: "same-origin",
         signal: AbortSignal.timeout(8000),
     });
-    if (response.status === 401) {
+    if (response.status === 401)
         throw new Error("Сессия завершена. Войдите снова.");
-    }
-    if (!response.ok) {
-        throw new Error(
-            "Связь потеряна. Данные могут быть устаревшими; повторяем запрос.",
-        );
-    }
+    if (!response.ok)
+        throw new Error("Не удалось обновить данные. Повторяем подключение.");
     return response.json();
 }
+Alpine.data("submitForm", () => ({
+    submitting: false,
+    init() {
+        this.$el.addEventListener("submit", () => {
+            this.submitting = true;
+        });
+        this.restore = () => {
+            this.submitting = false;
+        };
+        window.addEventListener("pageshow", this.restore);
+    },
+    destroy() {
+        window.removeEventListener("pageshow", this.restore);
+    },
+}));
 Alpine.data("taskDetail", (url) => ({
     ...common,
     task: null,
     delivery: null,
     timer: null,
     disposed: false,
+    connected: false,
+    showProgress: false,
     connection: "Загрузка состояния…",
     async init() {
         await this.poll();
+    },
+    timeline() {
+        return [...(this.task?.events || [])]
+            .filter(
+                (event) =>
+                    this.showProgress || event.event_type !== "task_progress",
+            )
+            .sort((a, b) => a.id - b.id);
     },
     async poll() {
         try {
@@ -55,10 +86,12 @@ Alpine.data("taskDetail", (url) => ({
                 if (this.disposed) return;
                 this.task = data.task;
                 this.delivery = data.delivery;
+                this.connected = true;
                 this.connection =
                     "Обновлено " + new Date().toLocaleTimeString("ru-RU");
             }
         } catch (error) {
+            this.connected = false;
             this.connection = error.message;
         }
         if (!this.disposed) this.timer = setTimeout(() => this.poll(), 1500);
@@ -70,7 +103,6 @@ Alpine.data("taskDetail", (url) => ({
 }));
 Alpine.data("monitor", (url) => ({
     ...common,
-    showOffline: false,
     snapshot: null,
     events: [],
     cursor: 0,
@@ -78,47 +110,83 @@ Alpine.data("monitor", (url) => ({
     flashTimer: null,
     disposed: false,
     flashes: {},
+    connected: false,
+    eventFilter: "important",
+    animate: true,
+    lastReceived: 0,
+    now: Date.now(),
     connection: "Подключение к мониторингу…",
     async init() {
+        this.tick = setInterval(() => {
+            this.now = Date.now();
+        }, 1000);
         await this.poll();
     },
+    fresh() {
+        return this.connected && this.now - this.lastReceived < 10000;
+    },
     metric(key) {
-        return this.snapshot?.broker?.[key] ?? "нет данных";
+        return this.fresh() ? (this.snapshot?.broker?.[key] ?? "—") : "—";
+    },
+    onlineWorkers() {
+        return this.fresh()
+            ? freshWorkers(this.snapshot, this.lastReceived, this.now)
+            : [];
+    },
+    offlineWorkers() {
+        const online = new Set(this.onlineWorkers().map((w) => w.worker_id));
+        return (
+            this.snapshot?.workers.filter((w) => !online.has(w.worker_id)) || []
+        );
     },
     onlineCount() {
+        return this.onlineWorkers().length;
+    },
+    currentTask(workerId) {
+        return this.fresh() ? workerTask(this.snapshot, workerId) : null;
+    },
+    workerFlash(id, key) {
         return (
-            this.snapshot?.workers.filter((worker) => worker.online).length || 0
+            this.animate && this.fresh() && !!this.flashes.workers?.[id]?.[key]
         );
+    },
+    visibleEvents() {
+        return this.events
+            .filter(
+                (event) =>
+                    this.eventFilter === "all" ||
+                    (this.eventFilter === "errors"
+                        ? event.event_type === "task_failed"
+                        : event.event_type !== "task_progress"),
+            )
+            .slice(0, 50);
+    },
+    toggleAnimation() {
+        this.animate = !this.animate;
+        if (!this.animate) this.flashes = {};
     },
     async poll() {
         try {
             if (!document.hidden) {
                 const data = await getJson(url + "?after=" + this.cursor);
                 if (this.disposed) return;
-                if (this.snapshot) {
-                    this.flashes = {
-                        created: data.events.some(
-                            (e) => e.event_type === "task_created",
-                        ),
-                        queued: data.events.some(
-                            (e) => e.event_type === "task_queued",
-                        ),
-                        started: data.events.some((e) =>
-                            ["task_started", "task_progress"].includes(
-                                e.event_type,
-                            ),
-                        ),
-                        completed: data.events.some(
-                            (e) => e.event_type === "task_completed",
-                        ),
-                    };
-                    clearTimeout(this.flashTimer);
-                    this.flashTimer = setTimeout(() => {
-                        this.flashes = {};
-                    }, 1300);
-                }
+                // The first snapshot is history, not activity happening now.
+                const mayAnimate = this.fresh() && this.animate;
+                this.flashes = mayAnimate
+                    ? transitions(
+                          data.events,
+                          new Set(this.events.map((e) => e.id)),
+                      )
+                    : {};
+                clearTimeout(this.flashTimer);
+                this.flashTimer = setTimeout(() => {
+                    this.flashes = {};
+                }, 1200);
                 this.snapshot = data;
                 this.cursor = data.cursor;
+                this.connected = true;
+                this.lastReceived = Date.now();
+                this.now = this.lastReceived;
                 this.events = [
                     ...new Map(
                         [...data.events, ...this.events].map((event) => [
@@ -130,16 +198,12 @@ Alpine.data("monitor", (url) => ({
                     .sort((a, b) => b.id - a.id)
                     .slice(0, 100);
                 this.connection =
-                    "Подключено · обновлено " +
-                    new Date().toLocaleTimeString("ru-RU");
+                    "Подключено · " + new Date().toLocaleTimeString("ru-RU");
             }
         } catch (error) {
-            this.connection = error.message;
+            this.connected = false;
             this.flashes = {};
-            if (this.snapshot)
-                this.snapshot.workers.forEach((worker) => {
-                    worker.online = false;
-                });
+            this.connection = error.message;
         }
         if (!this.disposed) this.timer = setTimeout(() => this.poll(), 1500);
     },
@@ -147,6 +211,7 @@ Alpine.data("monitor", (url) => ({
         this.disposed = true;
         clearTimeout(this.timer);
         clearTimeout(this.flashTimer);
+        clearInterval(this.tick);
     },
 }));
 window.Alpine = Alpine;

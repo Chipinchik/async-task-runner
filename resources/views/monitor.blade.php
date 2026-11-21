@@ -1,1 +1,188 @@
-<x-layout title="Мониторинг"><div x-data="monitor(@js(route('api.monitor')))"><div class="page-heading"><div><p class="eyebrow">СИСТЕМА В РЕАЛЬНОМ ВРЕМЕНИ</p><h1>Путь каждой задачи.</h1><p class="muted">Фактические события обработки. Обновление каждые 1,5 секунды.</p></div><form method="POST" action="{{ route('admin.demo') }}">@csrf<button class="button">Создать 6 тестовых задач</button></form></div><p class="poll-status" role="status" x-text="connection"></p><template x-if="snapshot"><div><div class="stats"><template x-for="(label, status) in statuses" :key="status"><div class="stat" :class="status"><span x-text="label"></span><strong x-text="snapshot.counts[status] || 0"></strong><small>Задачи в PostgreSQL</small></div></template><div class="stat"><span>Ожидают публикации</span><strong x-text="snapshot.outbox_pending"></strong><small x-text="snapshot.outbox_errors ? 'Ошибок публикации: ' + snapshot.outbox_errors : 'Transactional outbox'"></small></div></div><section class="panel flow-panel"><div class="panel-heading"><h2>Топология обработки</h2><span class="muted">Анимация по новым событиям</span></div><div class="diagram-scroll"><svg class="flow-svg" viewBox="0 0 1000 180" role="img" aria-label="Путь задания: Laravel, RabbitMQ, фактический Worker, PostgreSQL"><path class="flow-line" :class="{ pulse: flashes.created }" d="M200 88 H290"/><path class="flow-line" :class="{ pulse: flashes.started }" d="M450 88 H540"/><path class="flow-line" :class="{ pulse: flashes.completed }" d="M700 88 H790"/><g class="diagram-node" :class="{ lit: flashes.created }"><rect x="20" y="38" width="180" height="100" rx="16"/><text x="110" y="80">Laravel</text><text class="sub" x="110" y="107">HTTP + Outbox</text></g><g class="diagram-node" :class="{ lit: flashes.queued }"><rect x="290" y="38" width="160" height="100" rx="16"/><text x="370" y="80">RabbitMQ</text><text class="sub" x="370" y="107">Подтверждённая очередь</text></g><g class="diagram-node" :class="{ lit: flashes.started }"><rect x="540" y="38" width="160" height="100" rx="16"/><text x="620" y="80">Workers</text><text class="sub" x="620" y="107" x-text="onlineCount() + ' с живым heartbeat'"></text></g><g class="diagram-node" :class="{ lit: flashes.completed }"><rect x="790" y="38" width="190" height="100" rx="16"/><text x="885" y="80">PostgreSQL</text><text class="sub" x="885" y="107">Результаты + события</text></g></svg></div><div class="broker-metrics"><strong>RabbitMQ Management API</strong><span>Ready <b x-text="metric('messages_ready')"></b></span><span>Unacknowledged <b x-text="metric('messages_unacknowledged')"></b></span><span>Consumers <b x-text="metric('consumers')"></b></span></div><p class="help">Метрики брокера могут запаздывать на несколько секунд. Они не вычисляются из статусов задач.</p></section><section class="section-gap"><div class="panel-heading"><h2>Независимые Workers</h2><button class="text-button" @click="showOffline = !showOffline" x-text="showOffline ? 'Скрыть неактивных' : 'Показать неактивных'"></button><span class="muted">TTL heartbeat: <span x-text="snapshot.heartbeat_ttl"></span> с</span></div><div class="worker-grid"><template x-for="worker in snapshot.workers.filter(worker => worker.online || showOffline)" :key="worker.worker_id"><article class="panel worker-card" :class="{ offline: !worker.online, busy: worker.online && worker.current_task_id }"><div class="worker-heading"><span class="badge" :class="worker.online ? 'completed' : 'failed'" x-text="worker.online ? 'На связи' : 'Нет heartbeat'"></span><span x-text="'PID ' + worker.pid"></span></div><h3 class="mono" x-text="worker.worker_id"></h3><p class="muted" x-text="'Heartbeat: ' + date(worker.last_seen_at)"></p><template x-if="worker.current_task_id"><div><a :href="'/tasks/' + worker.current_task_id" class="mono" x-text="worker.current_task_id.slice(-8)"></a><p x-text="worker.online ? 'Задача получена этим Worker' : 'Последняя известная задача; состояние Worker неизвестно'"></p></div></template><p x-show="!worker.current_task_id" class="muted" x-text="worker.online ? 'Ожидает сообщения' : 'Не считается активным'"></p></article></template><p class="empty" x-show="!snapshot.workers.filter(worker => worker.online || showOffline).length">Heartbeat пока не поступал. Запустите сервис worker.</p></div></section><div class="detail-grid section-gap"><section class="panel"><div class="panel-heading"><h2>Активные задачи</h2><span class="muted">До 100</span></div><div class="active-tasks"><template x-for="task in snapshot.tasks" :key="task.id"><article class="active-task"><div><a :href="'/tasks/' + task.id" x-text="typeLabel(task.type) + ' · ' + task.id.slice(-8)"></a><span class="badge" :class="task.status" x-text="statusLabel(task.status)"></span></div><small class="mono" x-text="task.status === 'processing' ? task.worker_id : 'Ожидает получения Worker'"></small><div x-show="task.progress !== null && task.status === 'processing'" class="progress-block"><div class="progress-track"><div :style="'width:' + task.progress + '%'"></div></div><span x-text="task.progress + '%'"></span></div></article></template><p class="empty" x-show="!snapshot.tasks.length">Все задачи обработаны. Очередь заданий пуста.</p></div></section><section class="panel"><div class="panel-heading"><h2>Журнал событий</h2><span class="muted">Последние 100</span></div><div class="monitor-events"><template x-for="event in events" :key="event.id"><div class="monitor-event"><div><a :href="'/tasks/' + event.task_id" class="mono" x-text="event.task_id.slice(-8)"></a><time x-text="date(event.created_at)"></time></div><strong x-text="event.event_type"></strong><p x-text="event.message"></p><small class="mono" x-text="event.worker_id || 'Приложение / диспетчер'"></small></div></template><p class="empty" x-show="!events.length">Событий пока нет.</p></div></section></div></div></template></div></x-layout>
+<x-layout title="Мониторинг">
+    <div x-data="monitor(@js(route('api.monitor')))">
+        <x-page-heading title="Мониторинг обработки"
+            description="От отправки в очередь до готового результата. Все события — в реальном времени.">
+            <form method="POST" action="{{ route('admin.demo') }}" x-data="submitForm">@csrf<x-submit
+                    label="Запустить демо" icon="play" /></form>
+        </x-page-heading>
+        <div class="monitor-toolbar">
+            <div class="poll-status" role="status"><span class="live-dot" :class="{ offline: !fresh() }"></span><span
+                    x-text="connection"></span></div><button class="button secondary small" @click="toggleAnimation()"
+                :aria-pressed="animate"><x-icon name="activity" /><span
+                    x-text="animate ? 'Анимация включена' : 'Анимация выключена'"></span></button>
+        </div>
+        <div class="notice stale-banner" x-cloak x-show="snapshot && !fresh()">Свежие данные недоступны. Статистика
+            задач ниже отражает последнее успешное обновление. Состояние брокера и Workers не подтверждено.</div>
+        <div class="skeleton" x-show="!snapshot">Подключаемся к системе…</div>
+        <template x-if="snapshot">
+            <div>
+                <div class="stats monitor-stats">
+                    <div class="stat">
+                        <div class="stat-top"><span>Ожидают в RabbitMQ</span><span class="stat-icon amber"><x-icon
+                                    name="queue" /></span></div><strong
+                            x-text="metric('messages_ready')"></strong><small>Сообщения, готовые к доставке</small>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-top"><span>Доставлены Workers</span><span class="stat-icon"><x-icon
+                                    name="activity" /></span></div><strong
+                            x-text="metric('messages_unacknowledged')"></strong><small>Ожидают подтверждения
+                            обработки</small>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-top"><span>Активные Workers</span><span class="stat-icon"><x-icon
+                                    name="server" /></span></div><strong
+                            x-text="fresh() ? onlineCount() : '—'"></strong><small
+                            x-text="'По heartbeat · TTL ' + snapshot.heartbeat_ttl + ' с'"></small>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-top"><span>Результаты сохранены</span><span class="stat-icon green"><x-icon
+                                    name="database" /></span></div><strong
+                            x-text="snapshot.counts.completed || 0"></strong><small>Завершённые задачи в
+                            PostgreSQL</small>
+                    </div>
+                </div>
+                <section class="panel diagram-panel">
+                    <div class="panel-heading diagram-heading">
+                        <div>
+                            <h2>Путь задачи <span class="badge neutral">Live topology</span></h2>
+                            <p>Laravel → RabbitMQ → Workers → PostgreSQL</p>
+                        </div><span class="muted">Демо: 6 задач × 10 секунд</span>
+                    </div>
+                    <div class="pipeline" aria-label="Схема распределённой обработки">
+                        <div class="flow-node node-laravel" :class="{ 'node-flash': animate && flashes.created }">
+                            <div class="node-head"><span class="icon-tile"><x-icon name="code" /></span>
+                                <div>
+                                    <h3>Laravel</h3><small>ПРИЛОЖЕНИЕ</small>
+                                </div>
+                            </div>
+                            <div class="node-row"><span>В outbox</span><strong
+                                    x-text="snapshot.outbox_pending"></strong></div>
+                            <div class="node-row"><span>Ошибки отправки</span><strong
+                                    x-text="snapshot.outbox_errors"></strong></div>
+                            <div class="node-foot">Сохраняет и публикует задачи</div>
+                        </div>
+                        <div class="flow-node node-rabbit" :class="{ 'node-flash': animate && flashes.published }">
+                            <template x-if="animate && flashes.published"><i class="flow-packet publish"
+                                    aria-hidden="true"></i></template>
+                            <div class="node-head"><span class="icon-tile"><x-icon name="queue" /></span>
+                                <div>
+                                    <h3>RabbitMQ</h3><small>БРОКЕР СООБЩЕНИЙ</small>
+                                </div>
+                            </div>
+                            <div class="node-row"><span>В очереди</span><strong
+                                    x-text="metric('messages_ready')"></strong></div>
+                            <div class="node-row"><span>Потребители</span><strong x-text="metric('consumers')"></strong>
+                            </div>
+                            <div class="node-foot"
+                                x-text="!fresh() ? 'Нет свежих данных' : snapshot.broker.available ? (snapshot.broker.messages_ready === 0 ? 'Очередь пуста' : 'Сообщения ожидают доставки') : 'Брокер недоступен · нет метрик'">
+                            </div>
+                        </div>
+                        <div class="worker-lanes">
+                            <template x-for="(worker,index) in onlineWorkers()" :key="worker.worker_id">
+                                <div class="flow-node worker-node"
+                                    :class="{ busy: currentTask(worker.worker_id), 'node-flash': workerFlash(worker.worker_id,
+                                            'progress') || workerFlash(worker.worker_id, 'received') }">
+                                    <template x-if="workerFlash(worker.worker_id,'received')"><i class="flow-packet"
+                                            aria-hidden="true"></i></template><template
+                                        x-if="workerFlash(worker.worker_id,'saved')"><i class="flow-packet outbound"
+                                            aria-hidden="true"></i></template>
+                                    <div class="node-head"><span class="icon-tile"><x-icon name="server" /></span>
+                                        <h3 x-text="'Worker ' + (index + 1)"></h3><span class="badge"
+                                            :class="currentTask(worker.worker_id) ? 'processing' : 'completed'"
+                                            x-text="currentTask(worker.worker_id) ? 'В работе' : 'Свободен'"></span>
+                                    </div>
+                                    <p class="worker-id" x-text="worker.worker_id"></p>
+                                    <template x-if="currentTask(worker.worker_id)">
+                                        <div><a class="worker-task" :href="taskUrl(currentTask(worker.worker_id).id)"
+                                                x-text="typeLabel(currentTask(worker.worker_id).type) + ' · #' + currentTask(worker.worker_id).id.slice(-8)"></a>
+                                            <template x-if="currentTask(worker.worker_id).progress !== null">
+                                                <div class="progress-inline">
+                                                    <div class="progress-track" role="progressbar"
+                                                        aria-label="Прогресс Worker" aria-valuemin="0"
+                                                        aria-valuemax="100"
+                                                        :aria-valuenow="currentTask(worker.worker_id).progress">
+                                                        <div
+                                                            :style="'transform:scaleX(' + currentTask(worker.worker_id)
+                                                                .progress / 100 + ')'">
+                                                        </div>
+                                                    </div><span
+                                                        x-text="currentTask(worker.worker_id).progress + '%'"></span>
+                                                </div>
+                                            </template>
+                                            <p class="worker-empty"
+                                                x-show="currentTask(worker.worker_id)?.progress === null">Выполняет
+                                                обработку</p>
+                                        </div>
+                                    </template>
+                                    <p class="worker-empty" x-show="!currentTask(worker.worker_id)">Ожидает следующую
+                                        задачу</p>
+                                </div>
+                            </template>
+                            <div class="flow-node empty-state compact" x-show="onlineCount() === 0"><x-icon
+                                    name="server" />
+                                <p x-text="fresh() ? 'Нет активных Workers' : 'Состояние Workers неизвестно'"></p>
+                                <small class="help">Ожидаем свежий heartbeat</small>
+                            </div>
+                        </div>
+                        <div class="flow-node node-postgres" :class="{ 'node-flash': animate && flashes.completed }">
+                            <div class="node-head"><span class="icon-tile"><x-icon name="database" /></span>
+                                <div>
+                                    <h3>PostgreSQL</h3><small>РЕЗУЛЬТАТЫ</small>
+                                </div>
+                            </div>
+                            <div class="node-row"><span>Завершено</span><strong
+                                    x-text="snapshot.counts.completed || 0"></strong></div>
+                            <div class="node-row"><span>С ошибкой</span><strong
+                                    x-text="snapshot.counts.failed || 0"></strong></div>
+                            <div class="node-foot">Состояния, результаты и история</div>
+                        </div>
+                    </div>
+                    <div class="diagram-footer">
+                        <div class="diagram-legend"><span><i></i>Получение задания</span><span><i
+                                    class="green"></i>Сохранение результата</span></div><span>Анимация только по новым
+                            событиям</span>
+                    </div>
+                    <p class="help">Метрики RabbitMQ обновляются с задержкой в несколько секунд. Прогресс задач поступает отдельно из журнала выполнения.</p>
+                    <details class="offline-list" x-show="offlineWorkers().length">
+                        <summary x-text="'Неактивные / неподтверждённые Workers (' + offlineWorkers().length + ')'">
+                        </summary><template x-for="worker in offlineWorkers()" :key="worker.worker_id">
+                            <div class="offline-worker"><span class="mono" x-text="worker.worker_id"></span>
+                                <p x-text="'Последний heartbeat: ' + date(worker.last_seen_at)"></p>
+                            </div>
+                        </template>
+                    </details>
+                </section>
+                <div class="monitor-bottom">
+                    <section class="panel">
+                        <div class="panel-heading">
+                            <div>
+                                <h2>Текущие задачи</h2>
+                                <p>Статусы из PostgreSQL, до 100 последних задач</p>
+                            </div><span class="badge neutral"
+                                x-text="(snapshot.counts.queued || 0) + (snapshot.counts.processing || 0)"></span>
+                        </div>
+                        <template x-for="task in snapshot.tasks" :key="task.id">
+                            <div class="active-task">
+                                <div class="active-task-top"><a :href="taskUrl(task.id)"
+                                        x-text="typeLabel(task.type)"></a><span class="badge" :class="task.status"
+                                        x-text="statusLabel(task.status)"></span></div><span class="mono"
+                                    x-text="'#' + task.id.slice(-8) + ' · ' + (task.worker_id || (task.queued_at ? 'Опубликована в RabbitMQ' : 'Ожидает публикации'))"></span>
+                                <div class="progress-inline" x-show="task.progress !== null">
+                                    <div class="progress-track">
+                                        <div :style="'transform:scaleX(' + task.progress / 100 + ')'"></div>
+                                    </div><span x-text="task.progress + '%'"></span>
+                                </div>
+                            </div>
+                        </template>
+                        <div class="empty-state" x-show="snapshot.tasks.length === 0"><span class="icon-tile"><x-icon
+                                    name="check" /></span>
+                            <h3>Всё обработано</h3>
+                            <p>Запустите демо, чтобы увидеть движение задач и параллельную работу Workers.</p>
+                        </div>
+                    </section>
+                    <x-live-events />
+                </div>
+            </div>
+        </template>
+    </div>
+</x-layout>

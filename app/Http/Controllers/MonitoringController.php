@@ -36,7 +36,8 @@ class MonitoringController extends Controller
             'outbox_pending' => TaskOutbox::whereNull('published_at')->count(),
             'outbox_errors' => TaskOutbox::whereNull('published_at')->whereNotNull('last_error')->count(),
             'broker' => $metrics->read(), 'workers' => $workers,
-            'tasks' => Task::whereIn('status', ['queued', 'processing'])->latest()->limit(100)->get(['id', 'type', 'status', 'progress', 'worker_id', 'attempts', 'queued_at', 'started_at']),
+            'tasks' => Task::whereIn('status', ['queued', 'processing'])->orderByRaw("CASE WHEN status = 'processing' THEN 0 ELSE 1 END")->latest()->limit(100)->get(['id', 'type', 'status', 'progress', 'worker_id', 'attempts', 'queued_at', 'started_at']),
+            'failed_tasks' => Task::where('status', 'failed')->latest('finished_at')->limit(8)->get(['id', 'type', 'error_message', 'attempts', 'max_attempts', 'finished_at']),
             'events' => $events->sortByDesc('id')->values(), 'cursor' => max($cursor, $events->max('id') ?? 0),
         ])->header('Cache-Control', 'no-store');
     }

@@ -244,4 +244,23 @@ class TaskFlowTest extends TestCase
         $task->record('task_progress', 'Новый факт');
         $this->getJson('/api/monitor?after='.$cursor)->assertJsonCount(1, 'events')->assertJsonPath('events.0.message', 'Новый факт');
     }
+
+    public function test_monitor_keeps_running_tasks_visible_when_queue_exceeds_snapshot_limit(): void
+    {
+        Http::fake(['*' => Http::response([], 503)]);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $running = $this->task($admin);
+        $running->update(['status' => 'processing', 'worker_id' => 'confirmed-worker', 'created_at' => now()->subHour()]);
+        for ($i = 0; $i < 101; $i++) {
+            $this->task($admin);
+        }
+        $failed = $this->task($admin);
+        $failed->update(['status' => 'failed', 'error_message' => 'Неверная структура CSV.', 'attempts' => 3]);
+        $this->actingAs($admin)->getJson('/api/monitor')
+            ->assertOk()->assertJsonCount(100, 'tasks')
+            ->assertJsonPath('tasks.0.id', $running->id)
+            ->assertJsonPath('tasks.0.worker_id', 'confirmed-worker')
+            ->assertJsonPath('failed_tasks.0.id', $failed->id)
+            ->assertJsonPath('failed_tasks.0.error_message', 'Неверная структура CSV.');
+    }
 }

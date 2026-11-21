@@ -12,3 +12,5 @@ bootstrap/cache/*.php
 .agents
 .phpunit.cache
 database/*.sqlite*
+artifacts
+design-system

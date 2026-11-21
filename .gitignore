@@ -32,3 +32,4 @@ Thumbs.db
 # Local SQLite databases
 /database/*.sqlite*
 /artifacts/
+/.agents/skills/

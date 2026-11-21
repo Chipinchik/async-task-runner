@@ -1,1 +1,23 @@
-<x-layout title="Профиль"><div class="page-heading"><div><p class="eyebrow">АККАУНТ</p><h1>Ваш профиль</h1></div></div><div class="panel form-panel"><form method="POST" action="{{ route('profile') }}" class="form-stack">@csrf @method('PATCH')<label>Имя<input name="name" value="{{ old('name', auth()->user()->name) }}" required maxlength="100"></label><label>Email<input type="email" name="email" value="{{ old('email', auth()->user()->email) }}" required></label><p class="muted">Роль: {{ auth()->user()->role === 'admin' ? 'Администратор' : 'Пользователь' }}</p><button class="button">Сохранить изменения</button></form></div></x-layout>
+<x-layout title="Профиль">
+    <x-page-heading title="Ваш профиль" description="Личные данные и доступ к рабочему пространству." />
+    <div class="settings-grid">
+        <section>
+            <h2>Основная информация</h2>
+            <p class="muted">Имя отображается в меню.<br>Email используется для входа.</p>
+        </section>
+        <section class="panel padded">
+            <div class="profile-identity"><span class="avatar large">{{ mb_substr(auth()->user()->name, 0, 1) }}</span>
+                <div>
+                    <h2>{{ auth()->user()->name }}</h2><span
+                        class="badge neutral">{{ auth()->user()->role === 'admin' ? 'Администратор' : 'Пользователь' }}</span>
+                </div>
+            </div>
+            <form method="POST" action="{{ route('profile') }}" class="form-stack" x-data="submitForm">@csrf
+                @method('PATCH')
+                <x-field name="name" label="Имя" :value="auth()->user()->name" required maxlength="100" autocomplete="name" />
+                <x-field name="email" label="Email" type="email" :value="auth()->user()->email" required autocomplete="email" />
+                <div class="form-actions"><x-submit label="Сохранить изменения" icon="check" /></div>
+            </form>
+        </section>
+    </div>
+</x-layout>
